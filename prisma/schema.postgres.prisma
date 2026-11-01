@@ -1,0 +1,146 @@
+// KEEP IN SYNC with the corresponding sqlite/postgres schema file
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  icon        String?  // lucide icon name, e.g. "Code2", "Database", "Cloud"
+  order       Int      @default(0)
+  tools       Tool[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Country {
+  id     String  @id @default(cuid())
+  code   String  @unique // ISO-3166-1 alpha-2, e.g. "JP", "DE", "BR"
+  name   String  @unique
+  region String? // "Europe" | "Asia" | "LATAM" | "Africa" | "North America" | "Oceania" | "Middle East"
+  tools  Tool[]
+}
+
+model Tool {
+  id              String    @id @default(cuid())
+  name            String    @unique
+  slug            String    @unique
+  tagline         String    // concise one-liner
+  description     String    // 2–4 informative sentences
+  logoUrl         String?
+  websiteUrl      String    // PRIMARY CTA TARGET (required, real working URL)
+  docsUrl         String?
+  githubUrl       String?
+  license         String?   // "MIT", "Apache-2.0", "GPL-3.0", "BSD-3-Clause", "MPL-2.0", "Proprietary", etc.
+  pricing         String    @default("free") // "free" | "freemium" | "paid"
+  createdYear     Int?
+  popularity      Int       @default(0)      // 0-100 heuristic score
+  hiddenGem       Boolean   @default(false)  // true = under-the-radar tool
+  hiddenGemReason String?                    // editorial note explaining why it's a gem
+  isFeatured      Boolean   @default(false)
+  categoryId      String
+  category        Category  @relation(fields: [categoryId], references: [id])
+  countryId       String?
+  country         Country?  @relation(fields: [countryId], references: [id])
+  parentToolId    String?                    // optional e.g. framework -> language
+  parentTool      Tool?     @relation("ToolHierarchy", fields: [parentToolId], references: [id])
+  children        Tool[]    @relation("ToolHierarchy")
+  tags            Tag[]
+  bookmarks       Bookmark[]
+  stackTools      TechStackTool[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([categoryId])
+  @@index([countryId])
+  @@index([parentToolId])
+  @@index([hiddenGem])
+}
+
+model Tag {
+  id    String @id @default(cuid())
+  name  String @unique
+  slug  String @unique
+  tools Tool[]
+}
+
+model User {
+  id          String           @id @default(cuid())
+  email       String           @unique
+  name        String?
+  password    String
+  role        String           @default("user") // "admin" | "user" (tool submitter)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  submissions ToolSubmission[]
+  bookmarks   Bookmark[]
+  stacks      TechStack[]
+}
+
+model Bookmark {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  toolId    String
+  tool      Tool     @relation(fields: [toolId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, toolId])
+  @@index([userId])
+  @@index([toolId])
+}
+
+model TechStack {
+  id          String          @id @default(cuid())
+  name        String
+  description String?
+  slug        String          @unique
+  isPublic    Boolean         @default(true)
+  userId      String
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tools       TechStackTool[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([userId])
+}
+
+model TechStackTool {
+  id        String    @id @default(cuid())
+  stackId   String
+  stack     TechStack @relation(fields: [stackId], references: [id], onDelete: Cascade)
+  toolId    String
+  tool      Tool      @relation(fields: [toolId], references: [id], onDelete: Cascade)
+  role      String?   // "Frontend" | "Backend" | "Database" | "DevOps" | "Utility"
+  createdAt DateTime  @default(now())
+
+  @@unique([stackId, toolId])
+  @@index([stackId])
+  @@index([toolId])
+}
+
+model ToolSubmission {
+  id              String   @id @default(cuid())
+  name            String
+  websiteUrl      String
+  categoryId      String?
+  countryId       String?
+  submittedBy     String?
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  status          String   @default("pending") // "pending" | "approved" | "rejected"
+  rejectionReason String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
